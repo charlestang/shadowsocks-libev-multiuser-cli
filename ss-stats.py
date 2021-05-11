@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import List
 
 import psutil
+from psutil._common import sconn
 
 
 def get_argparser() -> argparse.ArgumentParser:
@@ -32,7 +33,7 @@ def get_processes_by_name(name: str) -> List[psutil.Process]:
     return res
 
 
-def get_conns_by_pids(pids: List[int]) -> List[tuple]:
+def get_conns_by_pids(pids: List[int]) -> List[sconn]:
     conns = psutil.net_connections()
     res = []
     for c in conns:
@@ -98,11 +99,21 @@ if __name__ == "__main__":
         print(record)
         records.append(record)
 
-    cur.executemany(
-        """INSERT INTO waterlog (server_id, pid, pid_created_at, total_traffic)
-                    VALUES (?, ?, ?, ?)""",
-        records,
-    )
+    for r in records:
+        cur.execute(
+            """SELECT COUNT(1) FROM waterlog
+                        WHERE server_id = ? AND pid = ? AND pid_created_at = ? AND total_traffic = ?""",
+            r,
+        )
+        cnt = cur.fetchone()[0]
+        if cnt == 0:
+            print(r)
+            res = cur.execute(
+                """INSERT INTO waterlog (server_id, pid, pid_created_at, total_traffic)
+                            VALUES (?, ?, ?, ?)""",
+                r,
+            )
+            print("insert result: ", res)
 
     conn.commit()
     conn.close()
